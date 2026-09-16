@@ -164,3 +164,195 @@ void gui::DestroyWindow() noexcept
 
     window = nullptr;
 }
+
+bool gui::CreateDevice() noexcept
+{
+    d3d = Direct3DCreate9(D3D_SDK_VERSION);
+
+    if (!d3d)
+        return false;
+
+    ZeroMemory(&presentParameters, sizeof(presentParameters));
+
+    presentParameters.Windowed = TRUE;
+    presentParameters.SwapEffect = D3DSWAPEFFECT_DISCARD;
+    presentParameters.BackBufferFormat = D3DFMT_UNKNOWN;
+    presentParameters.EnableAutoDepthStencil = TRUE;
+    presentParameters.AutoDepthStencilFormat = D3DFMT_D16;
+    presentParameters.PresentationInterval = D3DPRESENT_INTERVAL_ONE;
+
+    if (d3d->CreateDevice(
+        D3DADAPTER_DEFAULT,
+        D3DDEVTYPE_HAL,
+        window,
+        D3DCREATE_HARDWARE_VERTEXPROCESSING,
+        &presentParameters,
+        &device) < 0)
+    {
+        return false;
+    }
+
+    return true;
+}
+
+void gui::ResetDevice() noexcept
+{
+    ImGui_ImplDX9_InvalidateDeviceObjects();
+
+    const auto result = device->Reset(&presentParameters);
+
+    if (result == D3DERR_INVALIDCALL)
+        IM_ASSERT(false);
+
+    ImGui_ImplDX9_CreateDeviceObjects();
+}
+
+void gui::DestroyDevice() noexcept
+{
+    if (device)
+    {
+        device->Release();
+        device = nullptr;
+    }
+
+    if (d3d)
+    {
+        d3d->Release();
+        d3d = nullptr;
+    }
+}
+
+void gui::CreateImGui() noexcept
+{
+    IMGUI_CHECKVERSION();
+
+    ImGui::CreateContext();
+
+    ImGuiIO& io = ImGui::GetIO();
+
+    io.Fonts->AddFontFromFileTTF(
+        "C:\\Windows\\Fonts\\segoeui.ttf",
+        15.0f
+    );
+
+    io.IniFilename = nullptr;
+
+    ImGui::StyleColorsDark();
+
+    ImGui_ImplWin32_Init(window);
+    ImGui_ImplDX9_Init(device);
+}
+
+void gui::DestroyImGui() noexcept
+{
+    ImGui_ImplDX9_Shutdown();
+    ImGui_ImplWin32_Shutdown();
+
+    ImGui::DestroyContext();
+}
+
+void gui::BeginRender() noexcept
+{
+    MSG message{};
+
+    while (PeekMessage(
+        &message,
+        nullptr,
+        0,
+        0,
+        PM_REMOVE))
+    {
+        TranslateMessage(&message);
+        DispatchMessage(&message);
+    }
+
+    ImGui_ImplDX9_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+
+    ImGui::NewFrame();
+}
+
+void gui::EndRender() noexcept
+{
+    ImGui::EndFrame();
+
+    device->SetRenderState(
+        D3DRS_ZENABLE,
+        FALSE
+    );
+
+    device->SetRenderState(
+        D3DRS_ALPHABLENDENABLE,
+        FALSE
+    );
+
+    device->SetRenderState(
+        D3DRS_SCISSORTESTENABLE,
+        FALSE
+    );
+
+    device->Clear(
+        0,
+        nullptr,
+        D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER,
+        D3DCOLOR_RGBA(0, 0, 0, 255),
+        1.0f,
+        0
+    );
+
+    if (device->BeginScene() >= 0)
+    {
+        ImGui::Render();
+
+        ImGui_ImplDX9_RenderDrawData(
+            ImGui::GetDrawData()
+        );
+
+        device->EndScene();
+    }
+
+    const auto result =
+        device->Present(
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr
+        );
+
+    if (
+        result == D3DERR_DEVICELOST &&
+        device->TestCooperativeLevel() ==
+            D3DERR_DEVICENOTRESET)
+    {
+        ResetDevice();
+    }
+}
+
+void gui::Render() noexcept
+{
+    ImGui::SetNextWindowPos(
+        ImVec2(0.0f, 0.0f)
+    );
+
+    ImGui::SetNextWindowSize(
+        ImVec2(
+            static_cast<float>(WIDTH),
+            static_cast<float>(HEIGHT)
+        )
+    );
+
+    ImGui::Begin(
+        "ExternalCheatV3",
+        nullptr,
+        ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoMove
+    );
+
+    ImGui::Text("Build test");
+    ImGui::Separator();
+    ImGui::Text("ImGui + DirectX9 initialized successfully.");
+
+    ImGui::End();
+}
