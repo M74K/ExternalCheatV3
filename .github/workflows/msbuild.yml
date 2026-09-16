@@ -1,0 +1,61 @@
+name: Build ExternalCheatV3
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+  pull_request:
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Windows Release x64
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build Release x64
+        run: msbuild ExternalCheatV3.sln /m /p:Configuration=Release /p:Platform=x64
+
+      - name: Find build files
+        shell: powershell
+        run: |
+          Write-Host "=== EXE files ==="
+          Get-ChildItem -Path . -Recurse -Filter *.exe |
+            Select-Object FullName
+
+          Write-Host "=== DLL files ==="
+          Get-ChildItem -Path . -Recurse -Filter *.dll |
+            Select-Object FullName
+
+      - name: Prepare artifact
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path artifact
+
+          Get-ChildItem -Path . -Recurse -Filter *.exe |
+            Where-Object { $_.FullName -notlike "*\artifact\*" } |
+            Copy-Item -Destination artifact
+
+          Get-ChildItem -Path . -Recurse -Filter *.dll |
+            Where-Object { $_.FullName -notlike "*\artifact\*" } |
+            Copy-Item -Destination artifact
+
+          Write-Host "=== Artifact contents ==="
+          Get-ChildItem artifact
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ExternalCheatV3-Release-x64
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 30
